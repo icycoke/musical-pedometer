@@ -28,10 +28,12 @@
             app:layout_constraintStart_toStartOf="parent" />
 
     <fragment
-            android:id="@+id/fragment"
-            android:name="com.example.musicalpedometer.fragment.MapsFragment"
+            android:id="@+id/mapFragment"
+            android:name="com.icycoke.musicalpedometer.MapsFragment"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            tools:layout_editor_absoluteX="169dp"
-            tools:layout_editor_absoluteY="148dp" />
+            app:layout_constraintBottom_toTopOf="@+id/startOrStopButton"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

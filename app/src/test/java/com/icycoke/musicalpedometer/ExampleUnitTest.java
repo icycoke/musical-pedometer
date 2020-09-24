@@ -1,4 +1,4 @@
-package com.example.musicalpedometer;
+package com.icycoke.musicalpedometer;
 
 import org.junit.Test;
 
