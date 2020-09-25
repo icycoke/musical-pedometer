@@ -3,6 +3,7 @@ package com.icycoke.musicalpedometer;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.location.Location;
@@ -29,6 +30,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
@@ -38,7 +40,7 @@ public class MainActivity extends AppCompatActivity
 
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
-    private static final int DEFAULT_ZOOM = 15;
+    private static final int DEFAULT_ZOOM = 17;
     private static final int MARK_NOTHING = 0;
     private static final int MARK_START_POINT = 1;
     private static final int MARK_END_POINT = 2;
@@ -54,6 +56,7 @@ public class MainActivity extends AppCompatActivity
     private FragmentManager fragmentManager;
     private GoogleMap googleMap;
     private LocationCallback locationCallback;
+    private LatLng lastLatLng;
 
     public void startOrStopOnClick(View view) {
         Button button = (Button) view;
@@ -89,7 +92,7 @@ public class MainActivity extends AppCompatActivity
 
     @SuppressLint("MissingPermission")
     @Override
-    public void onMapReady(GoogleMap googleMap) {
+    public void onMapReady(final GoogleMap googleMap) {
         this.googleMap = googleMap;
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
         locationCallback = new LocationCallback() {
@@ -100,6 +103,13 @@ public class MainActivity extends AppCompatActivity
                     Log.d(TAG, "onLocationResult: location result is null");
                     Location lastLocation = locationResult.getLastLocation();
                     LatLng latLng = new LatLng(lastLocation.getLatitude(), lastLocation.getLongitude());
+                    System.out.println(latLng);
+                    if (lastLatLng != null) {
+                        googleMap.addPolyline(new PolylineOptions()
+                                .color(Color.RED)
+                                .add(lastLatLng, latLng));
+                    }
+                    lastLatLng = latLng;
                     MainActivity.this.googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
                 }
             }
@@ -184,6 +194,7 @@ public class MainActivity extends AppCompatActivity
                                 googleMap.addMarker(new MarkerOptions()
                                         .title(getResources().getString(R.string.start_point))
                                         .position(latLng));
+                                lastLatLng = latLng;
                             }
                             case MARK_END_POINT: {
                                 googleMap.addMarker(new MarkerOptions()
