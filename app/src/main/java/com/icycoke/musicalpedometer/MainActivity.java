@@ -147,6 +147,7 @@ public class MainActivity extends AppCompatActivity
                         LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
                         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
                         googleMap.setMyLocationEnabled(true);
+                        Log.d(TAG, "onSuccess: current location is shown");
                     } else {
                         Log.d(TAG, "onSuccess: current location is null");
                     }
