@@ -21,12 +21,14 @@ import androidx.fragment.app.FragmentManager;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
@@ -37,6 +39,9 @@ public class MainActivity extends AppCompatActivity
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private static final int DEFAULT_ZOOM = 15;
+    private static final int MARK_NOTHING = 0;
+    private static final int MARK_START_POINT = 1;
+    private static final int MARK_END_POINT = 2;
 
     protected boolean locationPermissionGranted;
 
@@ -48,6 +53,7 @@ public class MainActivity extends AppCompatActivity
     private LocationRequest locationRequest;
     private FragmentManager fragmentManager;
     private GoogleMap googleMap;
+    private LocationCallback locationCallback;
 
     public void startOrStopOnClick(View view) {
         Button button = (Button) view;
@@ -66,10 +72,6 @@ public class MainActivity extends AppCompatActivity
         // TODO
     }
 
-    public void setStartOrStopOnClickListener(StartOrStopOnClickListener startOrStopOnClickListener) {
-        this.startOrStopOnClickListener = startOrStopOnClickListener;
-    }
-
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         Log.d(TAG, "onRequestPermissionsResult: request permission result got");
@@ -85,11 +87,33 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     public void onMapReady(GoogleMap googleMap) {
         this.googleMap = googleMap;
-        showCurrentLocation();
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                Log.d(TAG, "onLocationResult: location result received");
+                if (locationResult != null) {
+                    Log.d(TAG, "onLocationResult: location result is null");
+                    Location lastLocation = locationResult.getLastLocation();
+                    LatLng latLng = new LatLng(lastLocation.getLatitude(), lastLocation.getLongitude());
+                    MainActivity.this.googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
+                }
+            }
+        };
+        fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, null);
+        showCurrentLocation(MARK_NOTHING);
+        fusedLocationProviderClient.removeLocationUpdates(locationCallback);
     }
+
+//    @Override
+//    public void onLocationChanged(@NonNull Location location) {
+//        Log.d(TAG, "onLocationChanged: location changed");
+//        updateMapFragment();
+//    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,7 +125,6 @@ public class MainActivity extends AppCompatActivity
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
                 .setInterval(1000)
                 .setFastestInterval(500);
-        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
         fragmentManager = getSupportFragmentManager();
         SupportMapFragment mapFragment = (SupportMapFragment) fragmentManager.findFragmentById(R.id.map);
@@ -123,21 +146,29 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    @SuppressLint("MissingPermission")
+    private void updateMapFragment() {
+        Task<Location> task = fusedLocationProviderClient.getLastLocation();
+
+    }
+
+    @SuppressLint("MissingPermission")
     private void start() {
-        startOrStopOnClickListener.showCurrentLocation();
+        googleMap.clear();
+        fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, null);
+        showCurrentLocation(MARK_START_POINT);
         // TODO
     }
 
     private void stop() {
+        showCurrentLocation(MARK_END_POINT);
+        fusedLocationProviderClient.removeLocationUpdates(locationCallback);
         // TODO
     }
 
     @SuppressLint("MissingPermission")
-    private void showCurrentLocation() {
-        getLocationPermission();
+    private void showCurrentLocation(final int markCode) {
         if (locationPermissionGranted) {
-            fusedLocationProviderClient.requestLocationUpdates(locationRequest, new LocationCallback(), null);
-
             Task<Location> task = fusedLocationProviderClient.getLastLocation();
             task.addOnSuccessListener(new OnSuccessListener<Location>() {
                 @Override
@@ -147,6 +178,19 @@ public class MainActivity extends AppCompatActivity
                         LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
                         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
                         googleMap.setMyLocationEnabled(true);
+
+                        switch (markCode) {
+                            case MARK_START_POINT: {
+                                googleMap.addMarker(new MarkerOptions()
+                                        .title(getResources().getString(R.string.start_point))
+                                        .position(latLng));
+                            }
+                            case MARK_END_POINT: {
+                                googleMap.addMarker(new MarkerOptions()
+                                        .title(getResources().getString(R.string.end_point))
+                                        .position(latLng));
+                            }
+                        }
                         Log.d(TAG, "onSuccess: current location is shown");
                     } else {
                         Log.d(TAG, "onSuccess: current location is null");
