@@ -45,18 +45,22 @@ public class MainActivity extends AppCompatActivity
     private static final int MARK_START_POINT = 1;
     private static final int MARK_END_POINT = 2;
 
-    protected boolean locationPermissionGranted;
+    private boolean isRunning;
+
+    private FragmentManager fragmentManager;
+
+    private boolean locationPermissionGranted;
+    private FusedLocationProviderClient fusedLocationProviderClient;
+    private LocationCallback locationCallback;
+    private LocationRequest locationRequest;
+    private LatLng lastLatLng;
+    private GoogleMap googleMap;
 
     private SensorManager sensorManager;
     private Sensor stepCounter;
-    private boolean isRunning;
-    private StartOrStopOnClickListener startOrStopOnClickListener;
-    private FusedLocationProviderClient fusedLocationProviderClient;
-    private LocationRequest locationRequest;
-    private FragmentManager fragmentManager;
-    private GoogleMap googleMap;
-    private LocationCallback locationCallback;
-    private LatLng lastLatLng;
+
+    private Thread mediaPlayThread;
+    private Thread dataCollectingThread;
 
     public void startOrStopOnClick(View view) {
         Button button = (Button) view;
@@ -119,12 +123,6 @@ public class MainActivity extends AppCompatActivity
         fusedLocationProviderClient.removeLocationUpdates(locationCallback);
     }
 
-//    @Override
-//    public void onLocationChanged(@NonNull Location location) {
-//        Log.d(TAG, "onLocationChanged: location changed");
-//        updateMapFragment();
-//    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -167,7 +165,6 @@ public class MainActivity extends AppCompatActivity
         googleMap.clear();
         fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, null);
         showCurrentLocation(MARK_START_POINT);
-        // TODO
     }
 
     private void stop() {
