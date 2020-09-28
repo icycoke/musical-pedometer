@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.location.Location;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -39,13 +40,19 @@ public class MainActivity extends AppCompatActivity
         implements OnMapReadyCallback {
 
     private static final String TAG = MainActivity.class.getSimpleName();
+
+    private static final int MUSIC_WHEN_WALKING = R.raw.music_slow;
+    private static final int MUSIC_WHEN_RUNNING = R.raw.music_fast;
+
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
-    private static final int DEFAULT_ZOOM = 17;
+    private static final int DEFAULT_ZOOM = 15;
     private static final int MARK_NOTHING = 0;
     private static final int MARK_START_POINT = 1;
     private static final int MARK_END_POINT = 2;
+    private static final float CRITICAL_SPEED = 4f;
 
-    private boolean isRunning;
+    private boolean isOnStart;
+    private boolean isPlayingMusic;
 
     private FragmentManager fragmentManager;
 
@@ -59,24 +66,29 @@ public class MainActivity extends AppCompatActivity
     private SensorManager sensorManager;
     private Sensor stepCounter;
 
+    private MediaPlayer mediaPlayer;
+    private float currentSpeed;
+
     private Thread mediaPlayThread;
     private Thread dataCollectingThread;
 
     public void startOrStopOnClick(View view) {
         Button button = (Button) view;
-        if (isRunning) {
+        if (isOnStart) {
             button.setText(R.string.start);
             stop();
-            isRunning = false;
+            isOnStart = false;
         } else {
             button.setText(R.string.stop);
             start();
-            isRunning = true;
+            isOnStart = true;
         }
     }
 
-    public void downloadReportOnClick() {
+    public void downloadReportOnClick(View view) {
         // TODO
+        Log.d(TAG, "downloadReportOnClick: on click");
+        switchToMusic(MUSIC_WHEN_RUNNING);
     }
 
     @Override
@@ -104,10 +116,8 @@ public class MainActivity extends AppCompatActivity
             public void onLocationResult(LocationResult locationResult) {
                 Log.d(TAG, "onLocationResult: location result received");
                 if (locationResult != null) {
-                    Log.d(TAG, "onLocationResult: location result is null");
                     Location lastLocation = locationResult.getLastLocation();
                     LatLng latLng = new LatLng(lastLocation.getLatitude(), lastLocation.getLongitude());
-                    System.out.println(latLng);
                     if (lastLatLng != null) {
                         googleMap.addPolyline(new PolylineOptions()
                                 .color(Color.RED)
@@ -115,6 +125,8 @@ public class MainActivity extends AppCompatActivity
                     }
                     lastLatLng = latLng;
                     MainActivity.this.googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
+                } else {
+                    Log.d(TAG, "onLocationResult: location result is null");
                 }
             }
         };
@@ -136,10 +148,14 @@ public class MainActivity extends AppCompatActivity
 
         fragmentManager = getSupportFragmentManager();
         SupportMapFragment mapFragment = (SupportMapFragment) fragmentManager.findFragmentById(R.id.map);
-
         if (mapFragment != null) {
             mapFragment.getMapAsync(this);
         }
+
+        currentSpeed = Float.MIN_VALUE;
+
+        isPlayingMusic = false;
+        mediaPlayer = MediaPlayer.create(MainActivity.this, MUSIC_WHEN_WALKING);
     }
 
     protected void getLocationPermission() {
@@ -154,17 +170,33 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private void updateMapFragment() {
-        Task<Location> task = fusedLocationProviderClient.getLastLocation();
-
+    private void start() {
+        startMapUpdate();
+        startMediaPlayer();
+        startCollectingData();
     }
 
     @SuppressLint("MissingPermission")
-    private void start() {
+    private void startMapUpdate() {
         googleMap.clear();
         fusedLocationProviderClient.requestLocationUpdates(locationRequest, locationCallback, null);
         showCurrentLocation(MARK_START_POINT);
+    }
+
+    private void startMediaPlayer() {
+        mediaPlayThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (mediaPlayer) {
+                    mediaPlayer.start();
+                }
+            }
+        });
+        mediaPlayThread.start();
+    }
+
+    private void startCollectingData() {
+
     }
 
     private void stop() {
@@ -186,11 +218,21 @@ public class MainActivity extends AppCompatActivity
                         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
                         googleMap.setMyLocationEnabled(true);
 
+                        float newSpeed = location.getSpeed();
+                        if (isPlayingMusic) {
+                            if (currentSpeed < CRITICAL_SPEED && newSpeed >= CRITICAL_SPEED) {
+                                MainActivity.this.switchToMusic(MUSIC_WHEN_RUNNING);
+                            } else if (currentSpeed >= CRITICAL_SPEED && newSpeed < CRITICAL_SPEED) {
+                                MainActivity.this.switchToMusic(MUSIC_WHEN_WALKING);
+                            }
+                        }
+                        currentSpeed = newSpeed;
+
                         switch (markCode) {
                             case MARK_START_POINT: {
                                 googleMap.addMarker(new MarkerOptions()
                                         .title(getResources().getString(R.string.start_point))
-                                        .position(latLng));
+                                        .position(latLng)).showInfoWindow();
                                 lastLatLng = latLng;
                             }
                             case MARK_END_POINT: {
@@ -218,7 +260,17 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    protected interface StartOrStopOnClickListener {
-        void showCurrentLocation();
+    private void switchToMusic(final int music) {
+        mediaPlayThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (mediaPlayer) {
+                    mediaPlayer.stop();
+                    mediaPlayer = MediaPlayer.create(MainActivity.this, music);
+                    mediaPlayer.start();
+                }
+            }
+        });
+        mediaPlayThread.start();
     }
 }
