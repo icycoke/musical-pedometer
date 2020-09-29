@@ -2,9 +2,12 @@ package com.icycoke.musicalpedometer;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.location.Location;
 import android.media.MediaPlayer;
@@ -18,6 +21,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -35,6 +39,10 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity
         implements OnMapReadyCallback {
@@ -64,13 +72,18 @@ public class MainActivity extends AppCompatActivity
     private GoogleMap googleMap;
 
     private SensorManager sensorManager;
-    private Sensor stepCounter;
+    private Sensor stepDetector;
+    private int stepCount;
+    private SensorEventListener stepListener;
 
     private MediaPlayer mediaPlayer;
     private float currentSpeed;
 
-    private Thread mediaPlayThread;
-    private Thread dataCollectingThread;
+    private File file;
+
+    private long lastNanoTime;
+    private long walkingNanoTime;
+    private long runningNanoTime;
 
     public void startOrStopOnClick(View view) {
         Button button = (Button) view;
@@ -85,10 +98,18 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    public void downloadReportOnClick(View view) {
-        // TODO
-        Log.d(TAG, "downloadReportOnClick: on click");
-        switchToMusic(MUSIC_WHEN_RUNNING);
+    public void playOrPauseOnClick(View view) {
+        if (isPlayingMusic) {
+            synchronized (mediaPlayer) {
+                mediaPlayer.pause();
+                isPlayingMusic = false;
+            }
+        } else {
+            synchronized (mediaPlayer) {
+                mediaPlayer.start();
+                isPlayingMusic = true;
+            }
+        }
     }
 
     @Override
@@ -125,6 +146,46 @@ public class MainActivity extends AppCompatActivity
                     }
                     lastLatLng = latLng;
                     MainActivity.this.googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
+                    Log.d(TAG, "onLocationResult: new location shown");
+
+                    float newSpeed = lastLocation.getSpeed();
+                    long currentNanoTime = System.nanoTime();
+                    if (newSpeed < CRITICAL_SPEED) {
+                        walkingNanoTime += currentNanoTime - lastNanoTime;
+                    } else {
+                        runningNanoTime += currentNanoTime - lastNanoTime;
+                    }
+                    lastNanoTime = currentNanoTime;
+
+                    if (isPlayingMusic) {
+                        if (currentSpeed < CRITICAL_SPEED && newSpeed >= CRITICAL_SPEED) {
+                            MainActivity.this.switchToMusic(MUSIC_WHEN_RUNNING);
+                        } else if (currentSpeed >= CRITICAL_SPEED && newSpeed < CRITICAL_SPEED) {
+                            MainActivity.this.switchToMusic(MUSIC_WHEN_WALKING);
+                        }
+                    }
+                    currentSpeed = newSpeed;
+
+                    Thread collectDataThread = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Log.d(TAG, "run: writing to file");
+                            synchronized (file) {
+                                try {
+                                    FileWriter fileWriter = new FileWriter(file, true);
+                                    StringBuilder sb = new StringBuilder();
+                                    sb.append("lat: ").append(lastLatLng.latitude).append('\t')
+                                            .append("lng: ").append(lastLatLng.longitude).append('\t')
+                                            .append("speed: ").append(currentSpeed).append('\n');
+                                    fileWriter.write(sb.toString());
+                                    fileWriter.flush();
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }
+                    });
+                    collectDataThread.start();
                 } else {
                     Log.d(TAG, "onLocationResult: location result is null");
                 }
@@ -155,7 +216,15 @@ public class MainActivity extends AppCompatActivity
         currentSpeed = Float.MIN_VALUE;
 
         isPlayingMusic = false;
-        mediaPlayer = MediaPlayer.create(MainActivity.this, MUSIC_WHEN_WALKING);
+        mediaPlayer = MediaPlayer.create(this, MUSIC_WHEN_WALKING);
+
+        file = new File(MainActivity.this.getFilesDir().getAbsolutePath() + "data.csv");
+        if (file != null) {
+            file.delete();
+        }
+
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
     }
 
     protected void getLocationPermission() {
@@ -171,9 +240,24 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void start() {
+        lastNanoTime = System.nanoTime();
+        walkingNanoTime = 0;
+        runningNanoTime = 0;
+        stepCount = 0;
+
+        stepListener = new SensorEventListener() {
+            @Override
+            public void onSensorChanged(SensorEvent event) {
+                stepCount++;
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+            }
+        };
+        sensorManager.registerListener(stepListener, stepDetector, SensorManager.SENSOR_DELAY_FASTEST);
         startMapUpdate();
-        startMediaPlayer();
-        startCollectingData();
     }
 
     @SuppressLint("MissingPermission")
@@ -183,26 +267,11 @@ public class MainActivity extends AppCompatActivity
         showCurrentLocation(MARK_START_POINT);
     }
 
-    private void startMediaPlayer() {
-        mediaPlayThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                synchronized (mediaPlayer) {
-                    mediaPlayer.start();
-                }
-            }
-        });
-        mediaPlayThread.start();
-    }
-
-    private void startCollectingData() {
-
-    }
-
     private void stop() {
         showCurrentLocation(MARK_END_POINT);
         fusedLocationProviderClient.removeLocationUpdates(locationCallback);
-        // TODO
+
+        sensorManager.unregisterListener(stepListener);
     }
 
     @SuppressLint("MissingPermission")
@@ -218,27 +287,28 @@ public class MainActivity extends AppCompatActivity
                         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_ZOOM));
                         googleMap.setMyLocationEnabled(true);
 
-                        float newSpeed = location.getSpeed();
-                        if (isPlayingMusic) {
-                            if (currentSpeed < CRITICAL_SPEED && newSpeed >= CRITICAL_SPEED) {
-                                MainActivity.this.switchToMusic(MUSIC_WHEN_RUNNING);
-                            } else if (currentSpeed >= CRITICAL_SPEED && newSpeed < CRITICAL_SPEED) {
-                                MainActivity.this.switchToMusic(MUSIC_WHEN_WALKING);
-                            }
-                        }
-                        currentSpeed = newSpeed;
-
                         switch (markCode) {
                             case MARK_START_POINT: {
                                 googleMap.addMarker(new MarkerOptions()
                                         .title(getResources().getString(R.string.start_point))
                                         .position(latLng)).showInfoWindow();
                                 lastLatLng = latLng;
+                                Log.d(TAG, "onSuccess: start maker added");
+                                break;
                             }
                             case MARK_END_POINT: {
                                 googleMap.addMarker(new MarkerOptions()
                                         .title(getResources().getString(R.string.end_point))
                                         .position(latLng));
+                                Log.d(TAG, "onSuccess: end marker added");
+
+                                DialogFragment reportDialogFragment =
+                                        new ReportDialogFragment((int) (walkingNanoTime / 1_000_000_000),
+                                                (int) (runningNanoTime / 1_000_000_000),
+                                                stepCount);
+                                reportDialogFragment.show(fragmentManager, "report");
+                                Log.d(TAG, "onSuccess: report generated");
+                                break;
                             }
                         }
                         Log.d(TAG, "onSuccess: current location is shown");
@@ -261,16 +331,17 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void switchToMusic(final int music) {
-        mediaPlayThread = new Thread(new Runnable() {
+        Thread switchMusicThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 synchronized (mediaPlayer) {
-                    mediaPlayer.stop();
+                    mediaPlayer.reset();
                     mediaPlayer = MediaPlayer.create(MainActivity.this, music);
                     mediaPlayer.start();
+                    Log.d(TAG, "run: music changed");
                 }
             }
         });
-        mediaPlayThread.start();
+        switchMusicThread.start();
     }
 }
