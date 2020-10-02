@@ -170,18 +170,18 @@ public class MainActivity extends AppCompatActivity
                         @Override
                         public void run() {
                             Log.d(TAG, "run: writing to file");
-                            synchronized (file) {
-                                try {
-                                    FileWriter fileWriter = new FileWriter(file, true);
-                                    StringBuilder sb = new StringBuilder();
-                                    sb.append("lat: ").append(lastLatLng.latitude).append('\t')
-                                            .append("lng: ").append(lastLatLng.longitude).append('\t')
-                                            .append("speed: ").append(currentSpeed).append('\n');
-                                    fileWriter.write(sb.toString());
-                                    fileWriter.flush();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
+                            file = new File(MainActivity.this.getFilesDir().getAbsolutePath() + "/data.csv");
+                            try {
+                                FileWriter fileWriter = new FileWriter(file, true);
+                                StringBuilder sb = new StringBuilder();
+                                sb.append("lat: ").append(lastLatLng.latitude).append('\t')
+                                        .append("lng: ").append(lastLatLng.longitude).append('\t')
+                                        .append("speed: ").append(currentSpeed).append('\n');
+                                fileWriter.write(sb.toString());
+                                fileWriter.flush();
+                                Log.d(TAG, file.getPath());
+                            } catch (IOException e) {
+                                e.printStackTrace();
                             }
                         }
                     });
@@ -217,11 +217,6 @@ public class MainActivity extends AppCompatActivity
 
         isPlayingMusic = false;
         mediaPlayer = MediaPlayer.create(this, MUSIC_WHEN_WALKING);
-
-        file = new File(MainActivity.this.getFilesDir().getAbsolutePath() + "data.csv");
-        if (file != null) {
-            file.delete();
-        }
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
