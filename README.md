@@ -12,4 +12,6 @@ The collected data file will be saved as `getFilesDir().getAbsolutePath() + "/da
 
 You can edit `CRITICAL_SPEED` field of `MainActivity` class to set a critical speed which is the standard speed to change the music (for better test the function)
 
-Music files are under`/res/drawable/`
+Music files are under`app/src/debug/res/drawable/`
+
+Edit `app/src/debug/res/values/google_maps_api.xml` with your own google maps api key if the default one from me is now invalid
