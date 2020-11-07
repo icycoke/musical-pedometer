@@ -3,8 +3,10 @@
 ## Intro
 
 Musical Pedometer can display the user's exercise track in real-time while the user is running, and record related exercise data in the background. At the same time, this software will perform real-time pattern recognition based on the user's exercise data, and play different music based on the recognition results. After the user finishes the exercise, the software will summarize and analyze the data collected in this period of exercise, and show the user a simple exercise report.
+![Musical Pedometer](https://github.com/icycoke/img-repo/blob/main/musical-pedometer/screenshot.png)
 
 ## Project Structure
+![Musical Pedometer Flowchart](https://github.com/icycoke/img-repo/blob/main/musical-pedometer/musical-pedometer.png)
 
 All source code files are under `com.icycoke.musicalpedometer` package
 
